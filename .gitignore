@@ -1,0 +1,7 @@
+.DS_Store
+.idea/
+.env
+config.json
+postgres-data/
+bin/*
+CICD/helm/config.json

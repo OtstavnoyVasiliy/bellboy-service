@@ -1,0 +1,91 @@
+version: '3'
+
+services:
+  goose:
+    build:
+      context: .
+      dockerfile: ./docker/goose/Dockerfile
+  
+  group-bot-app:
+    container_name: bot-app
+    build:
+      context: .
+      dockerfile: ./docker/bot/go.dockerfile
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: bot_db
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_TOPIC: members
+    restart: always
+    volumes:
+      - ./config.json:/config.json
+    depends_on:
+      - bot-db
+      - bot-kafka
+
+  bot-server:
+    container_name: server-app
+    build:
+      context: .
+      dockerfile: ./docker/server/go.dockerfile
+    environment:
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_TOPIC: members
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: bot_db
+    restart: always
+    volumes:
+      - ./config.json:/config.json
+    depends_on:
+      - bot-kafka
+      - bot-db
+    ports:
+      - "80:80"
+
+  bot-db:
+    image: postgres
+    container_name: bot-db
+    restart: always
+    hostname: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: bot_db
+      DB_PORT: 5432
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+
+  bot-zookeeper:
+    image: confluentinc/cp-zookeeper
+    hostname: zookeeper
+    container_name: bot-zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    
+  bot-kafka:
+    image: confluentinc/cp-kafka
+    hostname: kafka
+    container_name: bot-kafka
+    depends_on:
+      - bot-zookeeper
+    ports:
+      - 29092:29092
+    restart: always
+    environment:
+      KAFKA_ADVERTISED_HOST_NAME: kafka
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://host.docker.internal:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
